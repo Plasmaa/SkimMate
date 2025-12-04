@@ -336,12 +336,30 @@ elif st.session_state['page'] == 'dashboard':
             # Analysis
             stats, keyword_counts, context_data = processor.extract_sentences_with_keywords(uploaded_file, keyword_map)
             
+            # Phase 2: AI Triage & Citations
+            # We need raw text for these. Since we already read the stream in processor, we might need to re-read or adjust.
+            # However, processor.extract_sentences_with_keywords reads it. 
+            # Let's just re-read here for simplicity or better yet, let's extract text once.
+            # For now, we'll just re-open in processor functions as they handle seek(0).
+            
+            # Get full text for triage/citations (simplified extraction)
+            doc = fitz.open(stream=uploaded_file.read(), filetype="pdf")
+            full_text = ""
+            for page in doc:
+                full_text += page.get_text()
+            uploaded_file.seek(0) # Reset
+            
+            triage_data = processor.generate_paper_triage(full_text)
+            citations = processor.extract_citations(full_text)
+
             # Highlighting
             highlighted_pdf_bytes = processor.highlight_pdf(uploaded_file, keyword_map, CATEGORY_COLORS)
             
             st.session_state['stats'] = stats
             st.session_state['keyword_counts'] = keyword_counts
             st.session_state['context_data'] = context_data
+            st.session_state['triage_data'] = triage_data
+            st.session_state['citations'] = citations
             st.session_state['highlighted_pdf'] = highlighted_pdf_bytes
             st.session_state['processed'] = True
             st.rerun()
@@ -350,6 +368,12 @@ elif st.session_state['page'] == 'dashboard':
     left_col, right_col = st.columns([1, 3])
     
     with left_col:
+        if st.button("↺ Upload New Paper", use_container_width=True):
+            st.session_state['page'] = 'landing'
+            st.session_state['processed'] = False
+            st.session_state.pop('uploaded_file', None)
+            st.rerun()
+
         st.markdown("### Keyword Analysis")
         st.markdown("<div style='color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1rem;'>Toggle categories to filter results</div>", unsafe_allow_html=True)
         
@@ -393,13 +417,43 @@ elif st.session_state['page'] == 'dashboard':
         render_stat_card("Methodology", "border-blue", "icon-blue", "■")
         render_stat_card("Analysis/Results", "border-purple", "icon-purple", "■")
         
-        if st.button("↺ Upload New Paper", use_container_width=True):
-            st.session_state['page'] = 'landing'
-            st.session_state['processed'] = False
-            st.session_state.pop('uploaded_file', None)
-            st.rerun()
+
+            
+        # --- Phase 2: Citations Sidebar ---
+        if 'citations' in st.session_state:
+            st.sidebar.markdown("---")
+            with st.sidebar.expander("Detected Citations", expanded=False):
+                citations = st.session_state['citations']
+                if citations:
+                    for c in citations:
+                        st.markdown(f"- {c}")
+                else:
+                    st.info("No citations detected.")
 
     with right_col:
+        # --- Phase 2: Triage Deck ---
+        if 'triage_data' in st.session_state:
+            triage = st.session_state['triage_data']
+            st.markdown("### AI Triage Deck")
+            t1, t2, t3 = st.columns(3)
+            
+            def render_triage_card(title, content, emoji):
+                st.markdown(f"""
+                <div class="card" style="height: 200px; overflow-y: auto;">
+                    <div style="font-weight: bold; margin-bottom: 8px; color: var(--accent-color);">{emoji} {title}</div>
+                    <div style="font-size: 0.9rem; color: var(--text-color);">{content}</div>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            with t1:
+                render_triage_card("The Gap", triage['research_gap'], "🎯")
+            with t2:
+                render_triage_card("Data Source", triage['dataset_used'], "📊")
+            with t3:
+                render_triage_card("The Verdict", triage['main_conclusion'], "💡")
+            
+            st.markdown("<div style='margin-bottom: 2rem;'></div>", unsafe_allow_html=True)
+
         # Process & Highlight Section
         st.markdown("""
         <div class="card">

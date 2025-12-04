@@ -78,3 +78,75 @@ def highlight_pdf(pdf_file, keyword_map, color_map):
     output_buffer = io.BytesIO()
     doc.save(output_buffer)
     return output_buffer.getvalue()
+
+def generate_paper_triage(text_content):
+    """
+    Generates a heuristic-based triage of the paper using keyword matching.
+    """
+    triage = {
+        "research_gap": "Not detected.",
+        "dataset_used": "Not detected.",
+        "main_conclusion": "Not detected."
+    }
+    
+    # Heuristics
+    gap_keywords = ["limitation", "gap", "however", "although", "future work", "remains to be", "insufficient", "lack of"]
+    data_keywords = ["dataset", "survey", "participants", "sample size", "n =", "collected from", "database", "corpus"]
+    conclusion_keywords = ["conclude", "conclusion", "results show", "findings indicate", "summary", "demonstrate", "suggests"]
+    
+    # Split into sentences (simple split)
+    sentences = re.split(r'(?<!\w\.\w.)(?<![A-Z][a-z]\.)(?<=\.|\?)\s', text_content)
+    
+    # Helper to find best sentence
+    def find_best_sentence(keywords):
+        best_sent = None
+        max_score = 0
+        
+        for sent in sentences:
+            clean_sent = sent.strip()
+            if len(clean_sent) < 20 or len(clean_sent) > 500: # Filter too short/long
+                continue
+                
+            score = 0
+            lower_sent = clean_sent.lower()
+            for kw in keywords:
+                if kw in lower_sent:
+                    score += 1
+            
+            if score > max_score:
+                max_score = score
+                best_sent = clean_sent
+                
+        return best_sent
+
+    # Find best matches
+    gap = find_best_sentence(gap_keywords)
+    if gap: triage["research_gap"] = gap
+    
+    data = find_best_sentence(data_keywords)
+    if data: triage["dataset_used"] = data
+    
+    conclusion = find_best_sentence(conclusion_keywords)
+    if conclusion: triage["main_conclusion"] = conclusion
+    
+    return triage
+
+def extract_citations(text):
+    """
+    Extracts citations from the text using regex.
+    Supports formats like [1], [12], (Author, 2023).
+    """
+    citations = set()
+    
+    # Pattern for [1], [12], [1-3]
+    bracket_pattern = r'\[\d+(?:-\d+)?(?:,\s*\d+)*\]'
+    matches = re.findall(bracket_pattern, text)
+    citations.update(matches)
+    
+    # Pattern for (Author, Year) - simplified
+    # Looks for (Word, 19xx or 20xx)
+    author_year_pattern = r'\([A-Z][a-z]+(?: et al\.)?, \d{4}\)'
+    matches = re.findall(author_year_pattern, text)
+    citations.update(matches)
+    
+    return sorted(list(citations))
