@@ -3,7 +3,7 @@
 **SkimMate** is an intelligent research paper analysis tool designed to help researchers and students rapidly assess scientific papers. By automatically highlighting key concepts like **Methodology**, **Novelty**, and **Errors**, it allows for efficient skimming and quick insight extraction.
 
 ![SkimMate Dashboard](screenshot.png)
-*(Replace with actual screenshot if available)*
+
 
 ## 🚀 Features
 
